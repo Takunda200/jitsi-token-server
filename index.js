@@ -7,14 +7,22 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const JITSI_APP_ID = process.env.JITSI_APP_ID;
-const JITSI_KID = process.env.JITSI_KID;
-// Use backticks/template literals to preserve newlines in the key
-const JITSI_PRIVATE_KEY = process.env.JITSI_PRIVATE_KEY ? process.env.JITSI_PRIVATE_KEY.replace(/\\n/g, '\n') : "";
+// FIX 1: Trim accidental spaces from Render variables
+const JITSI_APP_ID = (process.env.JITSI_APP_ID || "").trim();
+const JITSI_KID = (process.env.JITSI_KID || "").trim();
+
+// Handle Private Key newlines
+const JITSI_PRIVATE_KEY = process.env.JITSI_PRIVATE_KEY 
+    ? process.env.JITSI_PRIVATE_KEY.replace(/\\n/g, '\n') 
+    : "";
 
 app.post('/generate-token', (req, res) => {
     try {
         const { isTeacher, roomName, userName, userEmail, userAvatar } = req.body;
+
+        // FIX 2: Force Room Name to Lowercase
+        // Jitsi often converts rooms to lowercase, so our token must match.
+        const cleanRoomName = (roomName || "*").replace(/\s+/g, '_').toLowerCase();
 
         const payload = {
             context: {
@@ -31,10 +39,11 @@ app.post('/generate-token', (req, res) => {
                 }
             },
             aud: "jitsi",
-            iss: "chat", // <--- THIS WAS THE FIX
+            iss: "chat", 
             sub: JITSI_APP_ID,
-            room: roomName || "*",
-            exp: Math.floor(Date.now() / 1000) + (60 * 60 * 4)
+            room: cleanRoomName, 
+            exp: Math.floor(Date.now() / 1000) + (60 * 60 * 4),
+            nbf: Math.floor(Date.now() / 1000) - 10 // FIX 3: Allow for small clock differences
         };
 
         const token = jwt.sign(payload, JITSI_PRIVATE_KEY, {
@@ -42,7 +51,7 @@ app.post('/generate-token', (req, res) => {
             header: { kid: JITSI_KID }
         });
 
-        res.json({ token: token });
+        res.json({ token: token, room: cleanRoomName });
 
     } catch (error) {
         console.error("Error:", error);
