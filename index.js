@@ -4,19 +4,13 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const app = express();
-app.use(cors()); // Allow your Flutter app to talk to this server
+app.use(cors());
 app.use(express.json());
 
-// --- YOUR KEYS GO HERE (Get these from 8x8.vc) ---
-// Ideally, put these in Render "Environment Variables" later for security.
-// For now, you can paste them here to test.
-const JITSI_APP_ID = process.env.JITSI_APP_ID || "vpaas-magic-cookie-YOUR-APP-ID";
-const JITSI_KID = process.env.JITSI_KID || "YOUR-KEY-ID";
-
-// IMPORTANT: When pasting the Private Key, keep the \n (newlines) or use backticks ` `
-const JITSI_PRIVATE_KEY = process.env.JITSI_PRIVATE_KEY || `-----BEGIN PRIVATE KEY-----
-YOUR_VERY_LONG_PRIVATE_KEY_HERE
------END PRIVATE KEY-----`;
+const JITSI_APP_ID = process.env.JITSI_APP_ID;
+const JITSI_KID = process.env.JITSI_KID;
+// Use backticks/template literals to preserve newlines in the key
+const JITSI_PRIVATE_KEY = process.env.JITSI_PRIVATE_KEY ? process.env.JITSI_PRIVATE_KEY.replace(/\\n/g, '\n') : "";
 
 app.post('/generate-token', (req, res) => {
     try {
@@ -37,10 +31,10 @@ app.post('/generate-token', (req, res) => {
                 }
             },
             aud: "jitsi",
-            iss: JITSI_APP_ID,
+            iss: "chat", // <--- THIS WAS THE FIX
             sub: JITSI_APP_ID,
             room: roomName || "*",
-            exp: Math.floor(Date.now() / 1000) + (60 * 60 * 4) // 4 hours expiration
+            exp: Math.floor(Date.now() / 1000) + (60 * 60 * 4)
         };
 
         const token = jwt.sign(payload, JITSI_PRIVATE_KEY, {
@@ -48,7 +42,6 @@ app.post('/generate-token', (req, res) => {
             header: { kid: JITSI_KID }
         });
 
-        console.log("Token generated for room:", roomName);
         res.json({ token: token });
 
     } catch (error) {
